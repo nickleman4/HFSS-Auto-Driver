@@ -1,0 +1,14 @@
+# HFSS 自动化驱动配置文件
+
+# 1. 基础设置
+project_path: "E:/Hfss_prj/test/test1/antenna1.aedt"  # 建议用正斜杠 / 防止路径转义报错
+hfss_version: "2023.1"
+num_freq_points: 151  # 你的扫频点数
+
+# 2. 变量设置（你可以随意增减这里的变量名，代码会自动适配）
+# 注意：这里的名字必须和 HFSS 模型里的变量名一模一样！
+variable_names:
+  - ld
+  - wd
+  #- Feed_X    # 假设你加了第三个参数，直接在这里往下写就行
+  #- Sub_Thick # 第四个参数...

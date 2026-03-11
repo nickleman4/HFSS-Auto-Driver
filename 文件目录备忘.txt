@@ -1,0 +1,10 @@
+HFSS-Auto-Driver/
+├── models/                  # 存放你的初始 HFSS 模板文件 (.aedt)
+│   └── base_antenna.aedt
+├── src/                     # 核心代码文件夹
+│   ├── __init__.py
+│   ├── hfss_driver.py       # 这里放我们马上要写的 run_hfss_simulation 函数
+│   └── main_loop.py         # 你写 for 循环 1000 次的主控程序
+├── .gitignore               # 【极其重要】Git 忽略配置
+├── requirements.txt         # 依赖包列表
+└── README.md                # 写给师弟们的说明书
