@@ -1,14 +1,53 @@
-# HFSS 自动化驱动配置文件
+# HFSS-Auto V1.0 远场数据集生成配置
 
 # 1. 基础设置
-project_path: "E:/Hfss_prj/test/test1/antenna1.aedt"  # 建议用正斜杠 / 防止路径转义报错
+project_path: "E:/Hfss_prj/HC_Antenna/withoutMs_cell/Opti_Result_tang2.aedt"   # 建议使用正斜杠 / 防止路径转义报错
 hfss_version: "2023.1"
-num_freq_points: 151  # 你的扫频点数
+design_name: "Opti_Result1"
 
-# 2. 变量设置（你可以随意增减这里的变量名，代码会自动适配）
-# 注意：这里的名字必须和 HFSS 模型里的变量名一模一样！
+# 2. HFSS 求解设置
+simulation:
+  setup_name: "Setup1"
+  sweep_name: "Sweep"
+  variable_unit: "mm"
+
+# 3. 变量设置
+# 注意：这里的名字必须和 HFSS 模型里的变量名一模一样，顺序必须和 input_data.csv 一致。
 variable_names:
-  - ld
-  - wd
-  #- Feed_X    # 假设你加了第三个参数，直接在这里往下写就行
-  #- Sub_Thick # 第四个参数...
+  - L
+  - L_add
+
+# 4. 输出设置
+outputs:
+  s11:
+    enabled: true
+
+  farfield:
+    enabled: true
+    convert_to_si: true
+    sphere_name: "EH"
+    frequencies:
+      - "2.1GHz"
+    theta:
+      start: -180
+      stop: 180
+      step: 5
+    phi:
+      start: 0
+      stop: 90
+      step: 90
+    components:
+      - rEPhi
+      - rETheta
+    parts:
+      - real
+      - imag
+
+# 5. 数据落盘设置
+output:
+  root_dir: "result"
+  run_dir_prefix: "run"
+  result_csv: "result_farfield.csv"
+  s11_csv: "result_s11.csv"
+  metadata_yaml: "run_metadata.yaml"
+  write_mode: "append"

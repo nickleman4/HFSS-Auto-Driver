@@ -1,58 +1,178 @@
-HFSS Automated Simulation Framework (v0.1)
-1. 项目简介
-适用于天线参数化扫描、代理模型（Surrogate Model）训练数据集生成以及结合启发式算法的全局优化任务。
+# HFSS-Auto V1.0
 
-3. 目录结构
-Plaintext
-HFSS-Auto-Driver/
-├── config.yaml          # 全局配置文件（工程路径、版本、变量声明）
-├── input_data.csv       # 输入数据矩阵（待仿真的参数组合）
-├── hfss_driver.py       # 核心驱动模块（基于 PyAEDT 的底层封装）
-├── main_loop.py         # 主控程序（执行批量调度与数据持久化）
-├── requirements.txt     # Python 环境依赖清单
-└── README.md            # 项目说明文档
+HFSS-Auto 用于批量修改 HFSS 结构参数、自动求解，并导出可用于神经网络训练的远场 `rE` 数据集。
 
-4. 环境配置
-本项目需在已安装 Ansys Electronics Desktop (AEDT) 的本地或工作站环境中运行。
+V1.0 的默认输出不再是单条 S11 扫频曲线，而是长表格式的远场数据：
 
-测试环境：Ansys HFSS 2023 R1, Python 3.10.
-配置环境在python3.10 pip install -r requirements.txt
+```text
+sample_id,ld,wd,freq,theta,phi,rEPhi_re,rEPhi_im,rETheta_re,rETheta_im,status,error_message
+```
 
-5. 使用说明
-5.1 模型准备
-确保待仿真的 HFSS 模型文件（.aedt）已配置好参数化变量（Project Variable 或 Design Variable），并设置了可用的求解设置（Setup）与扫频项（Sweep）。运行脚本前需确保关闭该模型的 GUI 界面。
+每一行对应一个结构样本在某个 `freq + theta + phi` 采样点上的远场复数分量。
+当 `outputs.s11.enabled: true` 时，程序会额外生成独立的 `result_s11.csv`：
 
-5.2 参数配置 (config.yaml)
-编辑配置文件，设置正确的绝对路径、HFSS 版本号、扫频点数以及需要修改的变量名称列表：
+```text
+sample_id,ld,wd,freq,s11_db,status,error_message
+```
 
+## 目录结构
+
+```text
+config.yaml              # 运行配置
+input_data.csv           # 结构参数输入
+result_farfield.csv      # V1.0 默认远场输出
+result_s11.csv           # 可选 S11 输出
+run_metadata.yaml        # 本次运行配置快照
+src/main_driver.py       # 批处理主入口
+src/hfss_driver.py       # HFSS/PyAEDT 封装
+src/config_loader.py     # 配置解析与列生成
+src/result_writer.py     # CSV/metadata 增量写入
+tests/                   # 离线单元测试
+```
+
+## 环境
+
+需要在已安装 Ansys Electronics Desktop 的机器上运行真实仿真。
+
+已知目标环境：
+
+```text
+Ansys HFSS 2023 R1
+Python 3.10
+pyaedt==0.6.73
+```
+
+安装依赖：
+
+```bash
+pip install -r requirements.txt
+```
+
+## 配置
+
+`config.yaml` 示例：
+
+```yaml
 project_path: "E:/Hfss_prj/test/test1/antenna1.aedt"
 hfss_version: "2023.1"
-num_freq_points: 151
+design_name: "Opti_Result1"
+
+simulation:
+  setup_name: "Setup1"
+  sweep_name: "Sweep"
+  variable_unit: "mm"
+
 variable_names:
   - ld
   - wd
 
-5.3 数据准备 (input_data.csv)
-根据 config.yaml 中的变量顺序，在 CSV 文件中输入样本矩阵（第一行为表头）：
+outputs:
+  s11:
+    enabled: true
 
+  farfield:
+    enabled: true
+    convert_to_si: true
+    sphere_name: "3D"
+    frequencies:
+      - "3GHz"
+    theta:
+      start: 0
+      stop: 180
+      step: 5
+    phi:
+      start: 0
+      stop: 360
+      step: 5
+    components:
+      - rEPhi
+      - rETheta
+    parts:
+      - real
+      - imag
+
+output:
+  root_dir: "result"
+  run_dir_prefix: "run"
+  result_csv: "result_farfield.csv"
+  s11_csv: "result_s11.csv"
+  metadata_yaml: "run_metadata.yaml"
+  write_mode: "append"
+```
+
+注意：
+
+- `variable_names` 必须与 HFSS 工程变量名一致。
+- `design_name` 必须与工程树中的 Design 名称一致，例如 `Opti_Result1`。
+- `input_data.csv` 的表头顺序应与 `variable_names` 一致。
+- `sphere_name` 必须与 HFSS 工程中的 Infinite Sphere / Far Field Setup 名称一致。
+- `frequencies` 使用显式频点，例如 `"3GHz"`。
+- `convert_to_si: true` 会让远场 rE 调用 `data_real(convert_to_SI=True)` 和 `data_imag(convert_to_SI=True)`，用于测试是否能与 HFSS GUI 表格显示单位对齐。
+
+## 输入数据
+
+`input_data.csv` 示例：
+
+```csv
 ld,wd
 6.0,1.0
 6.2,1.1
+```
 
-5.4 运行仿真
-在终端执行主控脚本：
+## 运行
 
-python main_loop.py
+```bash
+python src/main_driver.py
+```
 
-6. 常见错误排查 (Troubleshooting)
-错误提示: Project is locked. Close or remove the lock before proceeding.
+程序会：
 
-原因: 当前 .aedt 文件正被其他 HFSS 进程占用。
+1. 读取 `config.yaml` 和 `input_data.csv`。
+2. 启动 HFSS。
+3. 对每个结构样本修改变量并求解指定 setup。
+4. 按配置频点和 theta/phi 网格提取 `rEPhi`、`rETheta` 的实部/虚部。
+5. 每次运行自动创建 `result/run_YYYYMMDD_HHMMSS/`。
+6. 如果启用 S11，按同一频点提取 `s11_db` 并写入独立的 `result_s11.csv`。
+7. 每个样本完成后立即追加写入本次运行目录下的 `result_farfield.csv`。
+8. 复制本次 `config.yaml`、`input_data.csv`，并写入 `run_metadata.yaml` 作为配置快照。
 
-解决方案: 确保前台未打开该模型；在任务管理器中结束残留的 ansysedt.exe 进程；手动删除同目录下的 .lock 隐藏文件。
+## 失败样本
 
-输出结果异常: 生成的数据行为全零数组。
+如果某个样本求解或提取失败，程序仍会写入一行失败记录：
 
-原因: 输入尺寸导致几何模型干涉（如部件重叠），或网格剖分失败，触发了容错机制的预设惩罚值。
+```text
+sample_id,结构参数,status=failed,error_message
+```
 
-解决方案: 检查输入样本的数据边界，确保其在合理的物理意义域内。
+远场数值列填充为 `nan`，不再使用全零惩罚值，避免污染训练数据。
+
+## 验证
+
+离线单元测试不需要启动 HFSS：
+
+```bash
+pytest -q
+```
+
+真实 HFSS 集成验证建议先使用小网格：
+
+```yaml
+frequencies:
+  - "3GHz"
+theta:
+  start: 0
+  stop: 180
+  step: 90
+phi:
+  start: 0
+  stop: 90
+  step: 90
+```
+
+期望输出行数：
+
+```text
+样本数 × 频点数 × theta点数 × phi点数
+```
+
+然后抽查 HFSS GUI 报告中的远场数值是否与 CSV 一致。
